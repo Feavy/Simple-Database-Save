@@ -1,4 +1,4 @@
-package fr.feavy.simpleDB2.saver;
+package fr.feavy.simpleDB2.metadata;
 
 import java.lang.annotation.*;
 

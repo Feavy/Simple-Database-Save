@@ -1,16 +1,21 @@
 package fr.feavy.simpleDB2.sql;
 
-import fr.feavy.simpleDB2.saver.Arg;
+import fr.feavy.simpleDB2.metadata.Arg;
 import fr.feavy.simpleDB2.utils.DataFormatter;
 
+import javax.xml.crypto.Data;
 import java.lang.annotation.Annotation;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SQLType {
-    private Type type;
+    private DataType dataType;
     private Arg[] args;
 
-    public SQLType(Type type, Arg[] args) {
-        this.type = type;
+    public SQLType(DataType dataType, Arg[] args) {
+        this.dataType = dataType;
         this.args = args;
     }
 
@@ -18,7 +23,7 @@ public class SQLType {
     public boolean equals(Object obj) {
         if(obj instanceof SQLType) {
             SQLType other = (SQLType)obj;
-            if(type == other.type && args.length == other.args.length) {
+            if(dataType == other.dataType && args.length == other.args.length) {
                 for(int i = 0; i < args.length; i++) {
                     if(args[i].type() != other.args[i].type() || !args[i].value().equals(other.args[i].value()))
                         return false;
@@ -32,7 +37,7 @@ public class SQLType {
     @Override
     public String toString() {
         StringBuilder rep = new StringBuilder();
-        rep.append(type);
+        rep.append(dataType);
         if(args.length > 0) {
             rep.append("(");
             rep.append(DataFormatter.getFormatter(args[0].getClass()).formatValue(args[0].value()));
@@ -44,45 +49,66 @@ public class SQLType {
         return rep.toString();
     }
 
+    public static SQLType fromResultSet(ResultSet rep) throws SQLException {
+        String dataTypeStr = rep.getString("DATA_TYPE");
+        DataType type = null;
+        List<Arg> args = new ArrayList<>();
+        if(dataTypeStr.contains("VARCHAR")) {
+            type = DataType.VARCHAR;
+            args.add(createArg(rep.getInt("DATA_LENGTH")+"", DataType.NUMBER));
+        }else if(dataTypeStr.equals("NUMBER")) {
+            type = DataType.NUMBER;
+            args.add(createArg(rep.getInt("DATA_PRECISION")+"", DataType.NUMBER));
+            int scale = rep.getInt("DATA_SCALE");
+            if(scale != 0)
+                args.add(createArg(scale+"", DataType.NUMBER));
+        }
+        return new SQLType(type, args.toArray(new Arg[0]));
+    }
+
     public static SQLType fromClass(Class c) throws Exception {
         return fromClass(c, new Arg[0]);
     }
 
     public static SQLType fromClass(Class c, Arg[] args) throws Exception {
-        Type type;
+        DataType dataType;
         switch(c.getName()) {
             case "int":
-                type = Type.NUMBER;
+                dataType = DataType.NUMBER;
                 break;
             case "boolean":
-                type = Type.NUMBER;
-                args = new Arg[]{new Arg(){
-                    @Override
-                    public String value() {
-                        return "1";
-                    }
-
-                    @Override
-                    public Type type() {
-                        return Type.NUMBER;
-                    }
-
-                    @Override
-                    public Class<? extends Annotation> annotationType() {
-                        return Arg.class;
-                    }
-                }};
+                dataType = DataType.NUMBER;
+                args = new Arg[]{createArg("1", DataType.NUMBER)};
                 break;
             case "java.lang.String":
-                type = Type.VARCHAR;
+                dataType = DataType.VARCHAR;
                 break;
             default:
                 throw new Exception("Le type : "+c.getName()+ " n'est pas pris en charge.");
         }
-        return new SQLType(type, args);
+        return new SQLType(dataType, args);
     }
 
-    public enum Type {
+    private static Arg createArg(String value, DataType type) {
+        return new Arg(){
+            @Override
+            public String value() {
+                return value;
+            }
+
+            @Override
+            public DataType type() {
+                return type;
+            }
+
+            @Override
+            public Class<? extends Annotation> annotationType() {
+                return Arg.class;
+            }
+        };
+    }
+
+    public enum DataType {
         NUMBER, VARCHAR;
     }
 }
